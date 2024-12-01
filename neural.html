@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Erida-TrainOnlyFans</title>
+    <title>Erida Learn</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,36 +17,85 @@
         #results {
             margin-top: 20px;
         }
+        #chartContainer {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+        }
     </style>
 </head>
 <body>
-    <h1>Обучи нейросеть (и бла бла бла..)</h1>
+    <h1>Erida Learn</h1>
     <div id="controls">
         <label for="learningRate">Скорость обучения:</label>
         <input type="number" id="learningRate" name="learningRate" step="0.01" value="0.01"><br><br>
         <label for="epochs">Эпохи:</label>
         <input type="number" id="epochs" name="epochs" value="10"><br><br>
-        <label for="batchSize">Размер батча:</label>
+        <label for="batchSize">Размер пакета:</label>
         <input type="number" id="batchSize" name="batchSize" value="32"><br><br>
+        <label for="units">Нейроны в скрытом слое:</label>
+        <input type="number" id="units" name="units" value="4"><br><br>
+        <label for="activation">Функция активации:</label>
+        <select id="activation" name="activation">
+            <option value="relu">ReLU</option>
+            <option value="sigmoid">Sigmoid</option>
+            <option value="tanh">Tanh</option>
+        </select><br><br>
+        <label for="dataFile">Загрузить данные (JSON/TXT):</label>
+        <input type="file" id="dataFile" name="dataFile" accept=".json, .txt"><br><br>
         <button onclick="trainModel()">Обучить модель</button>
     </div>
     <div id="results">
-        <h2>Резульаты</h2>
-        <p>Loss: <span id="loss">N/A</span></p>
-        <p>Accuracy: <span id="accuracy">N/A</span></p>
+        <h2>Результаты</h2>
+        <p>Потери: <span id="loss">Н/Д</span></p>
+        <p>Точность: <span id="accuracy">Н/Д</span></p>
+        <h3>Лучший текст:</h3>
+        <p id="bestText">Н/Д</p>
+    </div>
+    <div id="chartContainer">
+        <canvas id="trainingChart"></canvas>
     </div>
 
     <script>
+        let chart;
+        let data = tf.tensor2d([[0, 0], [1, 0], [0, 1], [1, 1]], [4, 2]);
+        let labels = tf.tensor2d([[0], [1], [1], [0]], [4, 1]);
+
+        document.getElementById('dataFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    if (file.name.endsWith('.json')) {
+                        const jsonData = JSON.parse(content);
+                        data = tf.tensor2d(jsonData.data);
+                        labels = tf.tensor2d(jsonData.labels);
+                    } else if (file.name.endsWith('.txt')) {
+                        const lines = content.split('\n');
+                        const parsedData = lines.map(line => line.split(',').map(Number));
+                        data = tf.tensor2d(parsedData.slice(0, parsedData.length - 1));
+                        labels = tf.tensor2d(parsedData.slice(parsedData.length - 1));
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
         async function trainModel() {
             const learningRate = parseFloat(document.getElementById('learningRate').value);
             const epochs = parseInt(document.getElementById('epochs').value);
             const batchSize = parseInt(document.getElementById('batchSize').value);
+            const units = parseInt(document.getElementById('units').value);
+            const activation = document.getElementById('activation').value;
 
-            const data = tf.tensor2d([[0, 0], [1, 0], [0, 1], [1, 1]], [4, 2]);
-            const labels = tf.tensor2d([[0], [1], [1], [0]], [4, 1]);
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.data.datasets[1].data = [];
+            chart.update();
 
             const model = tf.sequential();
-            model.add(tf.layers.dense({units: 4, activation: 'relu', inputShape: [2]}));
+            model.add(tf.layers.dense({units: units, activation: activation, inputShape: [2]}));
             model.add(tf.layers.dense({units: 1, activation: 'sigmoid'}));
 
             model.compile({
@@ -57,12 +107,55 @@
             const result = await model.fit(data, labels, {
                 epochs: epochs,
                 batchSize: batchSize,
-                shuffle: true
+                shuffle: true,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        chart.data.labels.push(epoch + 1);
+                        chart.data.datasets[0].data.push(logs.loss);
+                        chart.data.datasets[1].data.push(logs.acc);
+                        chart.update();
+                    }
+                }
             });
 
             document.getElementById('loss').innerText = result.history.loss[result.history.loss.length - 1].toFixed(4);
             document.getElementById('accuracy').innerText = result.history.acc[result.history.acc.length - 1].toFixed(4);
+
+            const bestText = labels.arraySync().flat().reduce((a, b) => a + b, 0) > 0 ? 'Положительный' : 'Отрицательный';
+            document.getElementById('bestText').innerText = bestText;
         }
+
+        const ctx = document.getElementById('trainingChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Потери',
+                        data: [],
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Точность',
+                        data: [],
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
     </script>
 </body>
 </html>
