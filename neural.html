@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erida-TrainOnlyFans</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #controls {
+            margin-bottom: 20px;
+        }
+        #results {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Обучи нейросеть (и бла бла бла..)</h1>
+    <div id="controls">
+        <label for="learningRate">Скорость обучения:</label>
+        <input type="number" id="learningRate" name="learningRate" step="0.01" value="0.01"><br><br>
+        <label for="epochs">Эпохи:</label>
+        <input type="number" id="epochs" name="epochs" value="10"><br><br>
+        <label for="batchSize">Размер батча:</label>
+        <input type="number" id="batchSize" name="batchSize" value="32"><br><br>
+        <button onclick="trainModel()">Обучить модель</button>
+    </div>
+    <div id="results">
+        <h2>Резульаты</h2>
+        <p>Loss: <span id="loss">N/A</span></p>
+        <p>Accuracy: <span id="accuracy">N/A</span></p>
+    </div>
+
+    <script>
+        async function trainModel() {
+            const learningRate = parseFloat(document.getElementById('learningRate').value);
+            const epochs = parseInt(document.getElementById('epochs').value);
+            const batchSize = parseInt(document.getElementById('batchSize').value);
+
+            const data = tf.tensor2d([[0, 0], [1, 0], [0, 1], [1, 1]], [4, 2]);
+            const labels = tf.tensor2d([[0], [1], [1], [0]], [4, 1]);
+
+            const model = tf.sequential();
+            model.add(tf.layers.dense({units: 4, activation: 'relu', inputShape: [2]}));
+            model.add(tf.layers.dense({units: 1, activation: 'sigmoid'}));
+
+            model.compile({
+                optimizer: tf.train.adam(learningRate),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+
+            const result = await model.fit(data, labels, {
+                epochs: epochs,
+                batchSize: batchSize,
+                shuffle: true
+            });
+
+            document.getElementById('loss').innerText = result.history.loss[result.history.loss.length - 1].toFixed(4);
+            document.getElementById('accuracy').innerText = result.history.acc[result.history.acc.length - 1].toFixed(4);
+        }
+    </script>
+</body>
+</html>
